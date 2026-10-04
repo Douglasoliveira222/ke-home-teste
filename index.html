@@ -45,7 +45,7 @@ td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}tr.c{c
 .btn.d{background:none;color:var(--bad);border:1px solid var(--bad)}
 .cr{text-align:center;color:var(--mut);font-size:12px;padding:18px 12px 24px;border-top:1px solid var(--line)}
 .sg{width:100%;height:110px;background:#fff;border:1px dashed var(--line);border-radius:8px;touch-action:none;display:block;margin-bottom:4px}
-.calc{font-weight:700;background:var(--acc2)!important}.scanMod{z-index:60}.scanCard{max-width:560px!important;background:#0f1115!important;color:#fff!important}.scanTitle{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}.scanTitle h2{font-size:18px;margin:0}.scanHint{font-size:12px;color:#b9c0cc;margin:0 0 10px}.scanBox{position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:12px;overflow:hidden}.scanBox>div{width:100%!important;height:100%!important}.scanActions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}.scanStatus{font-size:12px;color:#b9c0cc;margin-top:8px;min-height:18px}.codeRow{display:flex;gap:8px;align-items:stretch}.codeRow input{flex:1;min-width:0}.scanBtn{flex:0 0 auto;width:44px;padding:8px 10px;font-size:20px;line-height:1}.scanBtn:disabled{opacity:.55}@media(max-width:760px){.scanCard{max-width:100%!important}.scanBox{aspect-ratio:3/4}}
+.calc{font-weight:700;background:var(--acc2)!important}.scanMod{z-index:60}.scanCard{max-width:560px!important;background:#0f1115!important;color:#fff!important}.scanTitle{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}.scanTitle h2{font-size:18px;margin:0}.scanHint{font-size:12px;color:#b9c0cc;margin:0 0 10px}.scanBox{position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:12px;overflow:hidden}.scanBox>div{width:100%!important;height:100%!important}.scanActions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}.scanStatus{font-size:12px;color:#b9c0cc;margin-top:8px;min-height:18px}.codeRow{display:flex;gap:8px;align-items:stretch}.codeRow input{flex:1;min-width:0}.scanBtn{flex:0 0 auto;width:44px;padding:8px 10px;font-size:20px;line-height:1}.scanBtn:disabled{opacity:.55}@media(max-width:760px){.scanCard{max-width:100%!important}.scanBox{aspect-ratio:4/3}}
 
 .fx{animation:fi .18s ease}@keyframes fi{from{opacity:.3;transform:translateY(4px)}to{opacity:1;transform:none}}
 .print-only{display:none}
@@ -92,7 +92,7 @@ td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}tr.c{c
  <div class="row" style="margin:16px 0 0;justify-content:flex-end"><button class="btn g" data-close>Cancelar</button><button class="btn" id="save">Registrar</button></div>
 </div></div>
 
-<div class="mod scanMod" id="scanMod"><div class="card scanCard"><div class="scanTitle"><h2>Ler código de barras</h2><button type="button" class="btn g s" id="scanClose">Fechar</button></div><p class="scanHint">Aponte a câmera traseira para o código e mantenha o código dentro da área de leitura.</p><div class="scanBox" id="scanBox"></div><div class="scanStatus" id="scanStatus">Iniciando câmera…</div><div class="scanActions"><button type="button" class="btn g" id="scanTorch">Luz</button></div></div></div>
+<div class="mod scanMod" id="scanMod"><div class="card scanCard"><div class="scanTitle"><h2>Ler código de barras</h2><button type="button" class="btn g s" id="scanClose">Fechar</button></div><p class="scanHint">Aponte a câmera traseira para o código. Deixe as barras bem grandes na tela e mantenha o celular firme por alguns segundos.</p><div class="scanBox" id="scanBox"></div><div class="scanStatus" id="scanStatus">Iniciando câmera…</div><div class="scanActions"><button type="button" class="btn g" id="scanTorch">Luz</button></div></div></div>
 <div class="mod" id="login"><div class="card" style="max-width:380px" id="lc"></div></div>
 <div class="mod" id="det"><div class="card" id="detc"></div></div>
 
@@ -792,23 +792,32 @@ applyLogo();render();
     const torch=document.getElementById("scanTorch");if(torch)torch.disabled=true;
     try{
       if(!window.ZXingBrowser||!window.ZXingBrowser.BrowserMultiFormatReader)throw new Error("ZXing não carregou");
-      reader=new ZXingBrowser.BrowserMultiFormatReader();
+      const ReaderClass=window.ZXingBrowser.BrowserMultiFormatOneDReader||window.ZXingBrowser.BrowserMultiFormatReader;
+      if(!ReaderClass)throw new Error("Leitor ZXing não disponível");
+      reader=new ReaderClass(undefined,{delayBetweenScanAttempts:250,delayBetweenScanSuccess:800});
+      if(reader.possibleFormats&&window.ZXingBrowser.BarcodeFormat&&window.ZXingBrowser.BarcodeFormat.EAN_13){
+        reader.possibleFormats=[window.ZXingBrowser.BarcodeFormat.EAN_13];
+      }
       videoEl=document.createElement("video");
       videoEl.setAttribute("playsinline","true");videoEl.setAttribute("autoplay","true");videoEl.muted=true;
       videoEl.style.width="100%";videoEl.style.height="100%";videoEl.style.objectFit="cover";
       box.appendChild(videoEl);
-      controls=await reader.decodeFromConstraints({video:{facingMode:{ideal:"environment"}}},videoEl,(result,error,ctrl)=>{
+      const constraints={video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30,max:30}}};
+      controls=await reader.decodeFromConstraints(constraints,videoEl,(result,error,ctrl)=>{
         if(!result)return;
         const code=String(result.getText?result.getText():result.text||"").trim();
         if(!code)return;
-        const fmt=result.getBarcodeFormat?String(result.getBarcodeFormat()):"";
-        if(!validEan13(code)){setScanStatus("Código detectado, aguardando um EAN-13 válido…");return}
+        if(!validEan13(code)){setScanStatus("Código detectado, mas não é um EAN-13 válido…");return}
         const now=Date.now();
-        if(code===lastCandidate&&now-lastCandidateAt<1200)candidateHits++;else{lastCandidate=code;candidateHits=1}
+        if(code===lastCandidate&&now-lastCandidateAt<1500)candidateHits++;else{lastCandidate=code;candidateHits=1}
         lastCandidateAt=now;
         setScanStatus("EAN-13 detectado: "+code+" · confirmando… "+candidateHits+"/2");
         if(candidateHits>=2)acceptCode(code);
       });
+      try{
+        const track=videoEl.srcObject&&videoEl.srcObject.getVideoTracks()[0];
+        if(track&&track.applyConstraints)await track.applyConstraints({advanced:[{focusMode:"continuous"}]});
+      }catch(e){}
       setScanStatus("Câmera pronta. Aponte para o código de barras.");
       if(torch)torch.disabled=true;
     }catch(err){
